@@ -1,0 +1,7 @@
+# West nile source
+FileName: West Nile virus human and non-human activity by county, 1999-2024_.csv
+URL: https://www.cdc.gov/west-nile-virus/data-maps/historic-data.html
+
+# Tick borne
+FlieName: AllTBD2022_Public.xlsx
+URL: https://www.cdc.gov/ticks/data-research/facts-stats/geographic-distribution-of-tickborne-disease-cases.html
