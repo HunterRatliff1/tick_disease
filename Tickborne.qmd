@@ -1,0 +1,237 @@
+---
+title: "Tickborne disease maps"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(warning=F, message=F, echo=T, collapse = T)
+library(WVPlots)
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(tigris)
+library(here)
+options(tigris_class = "sf")
+options(tigris_use_cache = TRUE)
+library(crsuggest)
+library(biscale)
+
+subset_states <- c("WV", "PA", "MD", "OH", "VA", "NC", "KY", "IN", "TN", "MI",
+                   "NJ", "NY", "CT", "RI", "DE", "MA", "NH", "VT", "ME")
+```
+
+# Read in data
+
+```{r}
+ticks <- readxl::read_excel(here("data", "AllTBD2022_Public.xlsx"),
+                            col_names = c("State","County", "FIPS", "Lyme", 
+                                          "Tularemia", "Babesiosis",
+                                          "Anaplasmosis", "Ehrlichiosis_ewingii", 
+                                          "Ehrlichiosis_chaffeensis",
+                                          "RMSF", 
+                                          "ehrlichiosis_anaplasmosis"), skip = 1) %>%
+  mutate(Ehrlichiosis_ewingii = Ehrlichiosis_ewingii + Ehrlichiosis_chaffeensis) %>%
+  rename(Ehrlichiosis = Ehrlichiosis_ewingii) %>%
+  select(-Ehrlichiosis_chaffeensis)
+```
+
+```{r}
+WNV <- readr::read_csv(here("data", "West Nile virus human and non-human activity by county, 1999-2024_.csv"), 
+                skip = 1,
+                col_names = c("GeoName", "Years", "FIPS", "Activity", "Cases_Human", "Cases_CNS", "BloodScreen", "Notes")) %>%
+  mutate(Activity = recode(Activity, 
+                           "Human infections"="Human",
+                           "Non-human activity"="NonHuman",
+                           "Human infections and non-human activity"="Both",
+                           "Data unavailable"="Unavailable")) %>%
+  select(-Notes)
+```
+
+```{r}
+df_population <- tidycensus::get_decennial(geography = "county", 
+                          variables = "P1_001N",   # Total population
+                          year = 2020,
+                          sumfile = "pl") %>%
+  select(FIPS=GEOID, pop=value)
+
+df_counties <- tigris::counties(cb=T) %>%
+  select(FIPS=GEOID, State=STUSPS, County=NAME)
+
+counties_all <- df_counties %>% 
+  left_join(df_population) %>%
+  filter(!State %in% c("PR", "AK", "HI", "GU", "VI", "AS", "MP")) 
+
+rm(df_population, df_counties)
+```
+
+```{r}
+sf_states <- tigris::states(cb=T) %>%
+  filter(!STUSPS %in% c("PR", "AK", "HI", "GU", "VI", "AS", "MP"))
+
+sf_states_subset <- sf_states %>%
+  rename(State=STUSPS) %>%
+  filter(State %in% subset_states)
+```
+
+# Join the data
+
+```{r}
+data_all <- counties_all %>%
+  left_join(select(ticks, -County, -State), by = "FIPS") %>%
+  left_join(select(WNV, -GeoName, -Years, -Activity), by = "FIPS")
+```
+
+# West Nile
+
+Okay, I know I titled this "tickborne" but I'm using this a case of west nile in the same presentation
+
+```{r}
+# data_all %>%
+#   filter(Cases_Human<1000) %>%
+#   ggplot(aes(x=Cases_Human)) +
+#   geom_histogram()
+data_all %>%
+  ggplot(aes(fill=Cases_Human)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states) +
+  scale_fill_fermenter(palette = "RdPu", direction = 1,  # distiller for continuous 
+                       breaks = c(0, 10, 25, 75, 200, 1000)) +
+  labs(title = "Total cases of West Nile Virus", subtitle = "1999-2024",
+       fill = "Number of human cases",
+       caption = "Source: CDC ArboNET data") +
+  theme_void()
+```
+
+```{r}
+# data_all %>%
+#   filter(Cases_Human<1000) %>%
+#   ggplot(aes(x=Cases_Human)) +
+#   geom_histogram()
+data_all %>%
+  filter(State %in% subset_states) %>%
+  ggplot(aes(fill=Cases_Human)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  scale_fill_fermenter(palette = "RdPu", direction = 1,  # distiller for continuous 
+                       breaks = c(0, 1, 25, 75, 200, 1000)) +
+  labs(title = "Total cases of West Nile Virus", subtitle = "1999-2024",
+       fill = "Number of human cases",
+       caption = "Source: CDC ArboNET data") +
+  theme_void()
+```
+
+## Per capita
+
+```{r}
+# data_all %>%
+#   mutate(Per100k = 100000 * Cases_Human/pop/25) %>%
+#   # filter(Per100k<250) %>%
+#   ggplot(aes(x=Per100k)) +
+#   # scale_x_log10() +
+#   geom_histogram() 
+data_all %>%
+  ggplot(aes(fill=100000 * Cases_Human/pop/25)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states) +
+  scale_fill_fermenter(palette = "RdPu", direction = 1,  # distiller for continuous 
+                       breaks = c(0, .5, 1, 2.5, 10, 25)) +
+  labs(title = "Per capita cases of West Nile Virus", subtitle = "Average annual number of cases (1999-2024)",
+       fill = "Annual cases\nper 100k population",
+       caption = "Source: CDC, 2020 Census") +
+  theme_void()
+```
+
+```{r}
+# data_all %>%
+#   mutate(Per100k = 100000 * Cases_Human/pop/25) %>%
+#   # filter(Per100k<250) %>%
+#   ggplot(aes(x=Per100k)) +
+#   # scale_x_log10() +
+#   geom_histogram() 
+data_all %>%
+  filter(State %in% subset_states) %>%
+  ggplot(aes(fill=100000 * Cases_Human/pop/25)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  scale_fill_distiller(palette = "RdPu", direction = 1) +
+  labs(title = "Per capita cases of West Nile Virus", subtitle = "Average annual number of cases (1999-2024)",
+       fill = "Annual cases\nper 100k population",
+       caption = "Source: CDC, 2020 Census") +
+  theme_void()
+```
+
+# Babesiosis
+
+```{r}
+# data_all %>%
+#   filter(Babesiosis<50) %>%
+#   ggplot(aes(x=Babesiosis)) +
+#   geom_histogram()
+data_all %>%
+  filter(State %in% subset_states) %>%
+  mutate(Babesiosis = na_if(Babesiosis, 0)) %>%
+  ggplot(aes(fill=Babesiosis)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  # scale_fill_fermenter(palette = "YlGn", direction = 1,  # distiller for continuous 
+  #                      breaks = c(0, 10, 25, 50, 150)) +
+  scale_fill_distiller(palette = "YlGn", direction = 1) +
+  labs(title = "Total cases of Babesiosis", subtitle = "2019-2022",
+       fill = "Babesiosis cases",
+       caption = "Source: CDC Tickborne Disease Surveillance") +
+  theme_void()
+```
+
+## Per capita
+
+```{r}
+# data_all %>%
+#   filter(State %in% subset_states) %>%
+#   filter(Babesiosis!=0) %>%
+#   pull(Babesiosis) %>%
+#   quantile(probs = seq(0, 1, by = 0.1))
+# # data_all %>%
+# #   filter(Babesiosis<50) %>%
+# #   ggplot(aes(x=Babesiosis)) +
+# #   geom_histogram()
+data_all %>%
+  filter(State %in% subset_states) %>%
+  mutate(Babesiosis = na_if(Babesiosis, 0)) %>%
+  ggplot(aes(fill=100000 * Babesiosis/pop)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  scale_fill_fermenter(palette = "YlGn", direction = 1,  # distiller for continuous
+                       breaks = c(0, 10, 25, 50, 100)) +
+  # scale_fill_distiller(palette = "YlGn", direction = 1) +
+  labs(title = "Per capita Babesiosis", subtitle = "2019-2022",
+       fill = "Babesiosis cases\nper 100k",
+       caption = "Source: CDC Tickborne Disease Surveillance") +
+  theme_void()
+```
+
+# Anaplasmosis
+
+```{r}
+# data_all %>%
+#   filter(State %in% subset_states) %>%
+#   filter(Anaplasmosis!=0) %>%
+#   pull(Anaplasmosis) %>%
+#   quantile(probs = seq(0, 1, by = 0.1))
+#   # filter(Anaplasmosis<50) %>%
+#   ggplot(aes(x=Anaplasmosis)) +
+#   geom_histogram()
+data_all %>%
+  filter(State %in% subset_states) %>%
+  mutate(Anaplasmosis = na_if(Anaplasmosis, 0)) %>%
+  ggplot(aes(fill=Anaplasmosis)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  scale_fill_fermenter(palette = "YlOrRd", direction = 1,  # distiller for continuous
+                       breaks = c(0, 5, 25, 50, 100, 300)) +
+  # scale_fill_distiller(palette = "YlGn", direction = 1) +
+  labs(title = "Total cases of Anaplasmosis", subtitle = "2019-2022",
+       fill = "Anaplasmosis cases",
+       caption = "Source: CDC Tickborne Disease Surveillance") +
+  theme_void() 
+```
