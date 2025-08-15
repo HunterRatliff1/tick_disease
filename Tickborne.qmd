@@ -98,7 +98,7 @@ data_all %>%
   scale_fill_fermenter(palette = "RdPu", direction = 1,  # distiller for continuous 
                        breaks = c(0, 10, 25, 75, 200, 1000)) +
   labs(title = "Total cases of West Nile Virus", subtitle = "1999-2024",
-       fill = "Number of human cases",
+       fill = "Human cases",
        caption = "Source: CDC ArboNET data") +
   theme_void()
 ```
@@ -116,7 +116,7 @@ data_all %>%
   scale_fill_fermenter(palette = "RdPu", direction = 1,  # distiller for continuous 
                        breaks = c(0, 1, 25, 75, 200, 1000)) +
   labs(title = "Total cases of West Nile Virus", subtitle = "1999-2024",
-       fill = "Number of human cases",
+       fill = "Human cases",
        caption = "Source: CDC ArboNET data") +
   theme_void()
 ```
@@ -235,3 +235,79 @@ data_all %>%
        caption = "Source: CDC Tickborne Disease Surveillance") +
   theme_void() 
 ```
+
+## Per capita
+
+```{r}
+# data_all %>%
+#   filter(State %in% subset_states) %>%
+#   filter(Anaplasmosis!=0) %>%
+#   mutate(Anaplasmosis = 100000 * Anaplasmosis/pop) %>%
+#   pull(Anaplasmosis) %>%
+#   quantile(probs = seq(0, 1, by = 0.1))
+#   # # filter(Anaplasmosis<50) %>%
+#   # ggplot(aes(x=Anaplasmosis)) +
+#   # geom_histogram()
+
+data_all %>%
+  filter(State %in% subset_states) %>%
+  mutate(Anaplasmosis = na_if(Anaplasmosis, 0)) %>%
+  ggplot(aes(fill=100000 * Anaplasmosis/pop)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  scale_fill_fermenter(palette = "YlOrRd", direction = 1,  # distiller for continuous
+                       breaks = c(0, 5, 25, 50, 100, 300)) +
+  # scale_fill_distiller(palette = "YlOrRd", direction = 1) +
+  labs(title = "Per capita Anaplasmosis", subtitle = "2019-2022",
+       fill = "Anaplasmosis cases\nper 100k",
+       caption = "Source: CDC Tickborne Disease Surveillance") +
+  theme_void() 
+```
+
+# Lyme, per capita
+
+```{r}
+data_all %>%
+  filter(State %in% subset_states) %>%
+  mutate(Lyme = na_if(Lyme, 0)) %>%
+  ggplot(aes(fill=100000 * Lyme/pop)) +
+  geom_sf(color=NA) +
+  geom_sf(fill=NA, data=sf_states_subset) +
+  # scale_fill_fermenter(palette = "PuBuGn", direction = 1,  # distiller for continuous
+  #                      breaks = c(0, 5, 25, 50, 100, 300)) +
+  scale_fill_distiller(palette = "PuBuGn", direction = 1) +
+  labs(title = "Per capita Lyme", subtitle = "2019-2022",
+       fill = "Lyme cases\nper 100k",
+       caption = "Source: CDC Tickborne Disease Surveillance") +
+  theme_void() 
+```
+
+# Biscale
+
+```{r}
+library(biscale)
+
+data_all %>%
+  filter(State %in% subset_states) %>%
+  filter(!State %in% c("IN", "MI", "KY", "NC", "TN", "VA")) %>%
+  
+  bi_class(x=Babesiosis, y=Anaplasmosis, style = "jenks", dim = 4) %>%
+
+  ggplot() +
+  geom_sf(aes(fill = bi_class), color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "GrPink2", dim = 3) +
+  
+  geom_sf(fill=NA, data=filter(sf_states_subset,
+                               !State %in% c("IN", "MI", "KY", "NC", "TN", "VA"))) +
+  # labs(title = "Babesiosis vs Anaplasmosis") +
+  bi_theme()
+
+# biscale_plot_Babesiosis_Anaplasmosis_600x350
+ bi_legend(pal = "GrPink2",
+                    dim = 4,
+                    xlab = "Higher Babesiosis ",
+                    ylab = "Higher Anaplasmosis ",
+                    size = 15)
+ 
+```
+
